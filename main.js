@@ -48,13 +48,12 @@ function initGraph() {
 
       if (graph.isAdjacent(i, j)) {
 
-        const v1 = graph.vertices[i];
-        const v2 = graph.vertices[j];
-        const object = new THREE.Mesh(edgeGeometry, edgeMaterial);
+        const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
+        edge.name = "edge";
+        edge.userData.v1 = graph.vertices[i];
+        edge.userData.v2 = graph.vertices[j];
 
-        object.name = "edge";
-
-        graph.edges.push({ v1, v2, object });
+        graph.edges.push(edge);
       }
     }
   }
@@ -88,7 +87,7 @@ function init() {
   }
 
   for (let i = 0; i < graph.size; i++) {
-    group.add(graph.edges[i].object);
+    group.add(graph.edges[i]);
   }
 
   // renderer
@@ -250,28 +249,28 @@ function updateEdges() {
   for (let i = 0; i < graph.size; i++) {
     const edge = graph.edges[i];
 
-    p1.copy(edge.v1.position);
-    p2.copy(edge.v2.position);
+    p1.copy(edge.userData.v1.position);
+    p2.copy(edge.userData.v2.position);
 
     // コントローラーが触っているときは、その分ずらす
-    if (edge.v1 === controller1.userData.selected) {
+    if (edge.userData.v1 === controller1.userData.selected) {
       p1.applyEuler(controller1.rotation).add(controller1.position);
     }
-    if (edge.v1 === controller2.userData.selected) {
+    if (edge.userData.v1 === controller2.userData.selected) {
       p1.applyEuler(controller2.rotation).add(controller2.position);
     }
-    if (edge.v2 === controller1.userData.selected) {
+    if (edge.userData.v2 === controller1.userData.selected) {
       p2.applyEuler(controller1.rotation).add(controller1.position);
     }
-    if (edge.v2 === controller2.userData.selected) {
+    if (edge.userData.v2 === controller2.userData.selected) {
       p2.applyEuler(controller2.rotation).add(controller2.position);
     }
 
-    edge.object.scale.z = p1.distanceTo(p2);
+    edge.scale.z = p1.distanceTo(p2);
 
     // 順番変えるとバグる
-    edge.object.position.lerpVectors(p1, p2, 0.5);
-    edge.object.lookAt(p1);
+    edge.position.lerpVectors(p1, p2, 0.5);
+    edge.lookAt(p1);
 
   }
 
