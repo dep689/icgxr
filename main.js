@@ -17,6 +17,8 @@ let group;
 
 let graph;
 
+let dynamicModeOn = false;
+
 init();
 animate();
 
@@ -95,6 +97,20 @@ function init() {
     group.add(graph.edges[i]);
   }
 
+  // switch
+
+  const btnGeometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+  const btnMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const dynamicModeSwitch = new THREE.Mesh(btnGeometry, btnMaterial);
+  dynamicModeSwitch.position.set(0.5, 1, -0.5);
+  group.add(dynamicModeSwitch);
+
+  dynamicModeSwitch.name = "button";
+  dynamicModeSwitch.userData.onClick = function toggleDynamicMode() {
+    dynamicModeOn = !dynamicModeOn;
+    dynamicModeSwitch.material.color.set(dynamicModeOn ? 0xff00ff : 0xffffff);
+  }
+
   // renderer
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -156,11 +172,16 @@ function onSelectStart(event) {
   const controller = event.target;
 
   const intersections = getIntersections(controller);
-  const intersection = intersections.find(item => item.object.name === "vertex");
+  const intersection = intersections.find(item => item.object.name !== "edge");
 
   if (intersection) {
 
     const object = intersection.object;
+    if (object.name === "button") {
+      object.userData.onClick();
+      return;
+    }
+    
     controller.attach(object);
 
     controller.userData.selected = object;
@@ -208,7 +229,7 @@ function intersectObjects(controller) {
 
   const line = controller.getObjectByName('line');
   const intersections = getIntersections(controller);
-  const intersection = intersections.find(item => item.object.name === "vertex");
+  const intersection = intersections.find(item => item.object.name !== "edge");
 
   if (intersection) {
 
@@ -232,7 +253,10 @@ function cleanIntersected() {
 
 function animate() {
 
-  updateVertices();
+  if (dynamicModeOn) {
+    updateVertices();
+  }
+
   updateEdges();
   
   render();
