@@ -165,6 +165,8 @@ function onSelectStart(event) {
 
     controller.userData.selected = object;
 
+    object.userData.freeze = true;
+
   }
 
   controller.userData.targetRayMode = event.data.targetRayMode;
@@ -233,7 +235,7 @@ function animate() {
   updateEdges();
   
   render();
-  
+
 }
 
 function render() {
@@ -283,13 +285,16 @@ function updateVertices() {
   const p2 = new THREE.Vector3();
 
   for (let i = 0; i < graph.order; i++) {
+
+    const v1 = graph.vertices[i]
+    if (v1.userData.freeze) continue;
+
     for (let j = 0; j < graph.order; j++) {
       if (i === j) continue;
 
       getVertexPosition(p1, graph.vertices[i]);
       getVertexPosition(p2, graph.vertices[j]);
 
-      const v1 = graph.vertices[i]
 
       // v1 に働く力
       const d = p1.distanceTo(p2);
