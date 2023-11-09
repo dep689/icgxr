@@ -17,6 +17,8 @@ let group;
 
 let graph;
 
+let dynamicModeOn = false;
+
 init();
 animate();
 
@@ -37,6 +39,7 @@ function initGraph() {
     graph.vertices[i].position.y = 1 + 0.3 * Math.sin(2 * i * Math.PI / graph.order);
     graph.vertices[i].position.z = -0.5;
     graph.vertices[i].name = "vertex";
+    graph.vertices[i].userData.totalForce = new THREE.Vector3();
   }
 
   // 辺
@@ -59,6 +62,10 @@ function initGraph() {
   }
 
   graph.size = graph.edges.length;
+
+  // 頂点が均等に広がるための最適な距離
+  const volume = 0.6 ** 3;
+  graph.optimalDistance = (volume / graph.order) ** (1/3);
 
 }
 
@@ -88,6 +95,20 @@ function init() {
 
   for (let i = 0; i < graph.size; i++) {
     group.add(graph.edges[i]);
+  }
+
+  // switch
+
+  const btnGeometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+  const btnMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const dynamicModeSwitch = new THREE.Mesh(btnGeometry, btnMaterial);
+  dynamicModeSwitch.position.set(0.5, 1, -0.5);
+  group.add(dynamicModeSwitch);
+
+  dynamicModeSwitch.name = "button";
+  dynamicModeSwitch.userData.onClick = function toggleDynamicMode() {
+    dynamicModeOn = !dynamicModeOn;
+    dynamicModeSwitch.material.color.set(dynamicModeOn ? 0xff00ff : 0xffffff);
   }
 
   // renderer
@@ -151,14 +172,21 @@ function onSelectStart(event) {
   const controller = event.target;
 
   const intersections = getIntersections(controller);
-  const intersection = intersections.find(item => item.object.name === "vertex");
+  const intersection = intersections.find(item => item.object.name !== "edge");
 
   if (intersection) {
 
     const object = intersection.object;
+    if (object.name === "button") {
+      object.userData.onClick();
+      return;
+    }
+    
     controller.attach(object);
 
     controller.userData.selected = object;
+
+    object.userData.freeze = true;
 
   }
 
@@ -177,6 +205,7 @@ function onSelectEnd(event) {
 
     controller.userData.selected = undefined;
 
+    object.userData.freeze = false;
   }
 
 }
@@ -200,7 +229,7 @@ function intersectObjects(controller) {
 
   const line = controller.getObjectByName('line');
   const intersections = getIntersections(controller);
-  const intersection = intersections.find(item => item.object.name === "vertex");
+  const intersection = intersections.find(item => item.object.name !== "edge");
 
   if (intersection) {
 
@@ -224,6 +253,10 @@ function cleanIntersected() {
 
 function animate() {
 
+  if (dynamicModeOn) {
+    updateVertices();
+  }
+
   updateEdges();
   
   render();
@@ -241,6 +274,73 @@ function render() {
 
 }
 
+function getVertexPosition(p, v) {
+  p.copy(v.position);
+
+  // コントローラーが触っているときは、その分ずらす
+  if (v === controller1.userData.selected) {
+    p.applyEuler(controller1.rotation).add(controller1.position);
+  }
+  if (v === controller2.userData.selected) {
+    p.applyEuler(controller2.rotation).add(controller2.position);
+  }
+}
+
+function clearForce() {
+  for (let i = 0; i < graph.order; i++) {
+    graph.vertices[i].userData.totalForce.set(0,0,0);
+  }
+}
+
+function attractiveForce(d) {
+  return d ** 2 / graph.optimalDistance;
+}
+
+function repulsiveForce(d) {
+  if (d === 0) return 0;
+  return graph.optimalDistance ** 2 / d;
+}
+
+
+function updateVertices() {
+
+  clearForce();
+  
+  const fa = new THREE.Vector3();
+  const fr = new THREE.Vector3();
+  const p1 = new THREE.Vector3();
+  const p2 = new THREE.Vector3();
+
+  for (let i = 0; i < graph.order; i++) {
+
+    const v1 = graph.vertices[i]
+    if (v1.userData.freeze) continue;
+
+    for (let j = 0; j < graph.order; j++) {
+      if (i === j) continue;
+
+      getVertexPosition(p1, graph.vertices[i]);
+      getVertexPosition(p2, graph.vertices[j]);
+
+
+      // v1 に働く力
+      const d = p1.distanceTo(p2);
+      if (graph.isAdjacent(i, j)) {
+        fa.subVectors(p2, p1).setLength(attractiveForce(d));
+        v1.userData.totalForce.add(fa);
+      }
+      fr.subVectors(p1, p2).setLength(repulsiveForce(d));
+      v1.userData.totalForce.add(fr);
+    }
+  }
+
+  for (let i = 0; i < graph.order; i++) {
+    const v = graph.vertices[i];
+    v.userData.totalForce.multiplyScalar(0.01);
+    v.position.add(v.userData.totalForce);
+  }
+}
+
 function updateEdges() {
 
   const p1 = new THREE.Vector3();
@@ -249,22 +349,8 @@ function updateEdges() {
   for (let i = 0; i < graph.size; i++) {
     const edge = graph.edges[i];
 
-    p1.copy(edge.userData.v1.position);
-    p2.copy(edge.userData.v2.position);
-
-    // コントローラーが触っているときは、その分ずらす
-    if (edge.userData.v1 === controller1.userData.selected) {
-      p1.applyEuler(controller1.rotation).add(controller1.position);
-    }
-    if (edge.userData.v1 === controller2.userData.selected) {
-      p1.applyEuler(controller2.rotation).add(controller2.position);
-    }
-    if (edge.userData.v2 === controller1.userData.selected) {
-      p2.applyEuler(controller1.rotation).add(controller1.position);
-    }
-    if (edge.userData.v2 === controller2.userData.selected) {
-      p2.applyEuler(controller2.rotation).add(controller2.position);
-    }
+    getVertexPosition(p1, edge.userData.v1);
+    getVertexPosition(p2, edge.userData.v2);
 
     edge.scale.z = p1.distanceTo(p2);
 
