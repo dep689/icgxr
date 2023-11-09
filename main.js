@@ -62,8 +62,8 @@ function initGraph() {
   graph.size = graph.edges.length;
 
   // 頂点が均等に広がるための最適な距離
-
-  graph.optimalDistance = Math.sqrt(1 * 1 / graph.order);
+  const outlineWidth = .3;
+  graph.optimalDistance = (outlineWidth ** 3 / graph.order) ** (1/3);
 
 }
 
