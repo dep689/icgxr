@@ -37,6 +37,7 @@ function initGraph() {
     graph.vertices[i].position.y = 1 + 0.3 * Math.sin(2 * i * Math.PI / graph.order);
     graph.vertices[i].position.z = -0.5;
     graph.vertices[i].name = "vertex";
+    graph.vertices[i].userData.totalForce = new THREE.Vector3();
   }
 
   // 辺
@@ -59,6 +60,10 @@ function initGraph() {
   }
 
   graph.size = graph.edges.length;
+
+  // 頂点が均等に広がるための最適な距離
+
+  graph.optimalDistance = Math.sqrt(1 * 1 / graph.order);
 
 }
 
@@ -224,10 +229,11 @@ function cleanIntersected() {
 
 function animate() {
 
+  updateVertices();
   updateEdges();
   
   render();
-
+  
 }
 
 function render() {
@@ -241,6 +247,69 @@ function render() {
 
 }
 
+function attractiveForce(distance) {
+  return distance * distance / graph.optimalDistance;
+}
+
+function repulsiveForce(distance) {
+  return graph.optimalDistance * graph.optimalDistance / distance;
+}
+
+function clearForce() {
+  for (let i = 0; i < graph.order; i++) {
+    graph.vertices[i].userData.totalForce.set(0,0,0);
+  }
+}
+
+function getVertexPosition(p, v) {
+  p.copy(v.position);
+
+  // コントローラーが触っているときは、その分ずらす
+  if (v === controller1.userData.selected) {
+    p.applyEuler(controller1.rotation).add(controller1.position);
+  }
+  if (v === controller2.userData.selected) {
+    p.applyEuler(controller2.rotation).add(controller2.position);
+  }
+}
+
+function updateVertices() {
+
+  clearForce();
+  
+  const fa = new THREE.Vector3();
+  const fr = new THREE.Vector3();
+  const p1 = new THREE.Vector3();
+  const p2 = new THREE.Vector3();
+
+  for (let i = 0; i < graph.order; i++) {
+    for (let j = 0; j < graph.order; j++) {
+      if (i === j) continue;
+
+      getVertexPosition(p1, graph.vertices[i]);
+      getVertexPosition(p2, graph.vertices[j]);
+
+      const v1 = graph.vertices[i]
+
+      // v1 に働く力
+      const d = p1.distanceTo(p2);
+      if (graph.isAdjacent(i, j)) {
+        fa.subVectors(p2, p1).divideScalar(d).multiplyScalar(attractiveForce(d));
+        fa.multiplyScalar(0.01);
+        v1.userData.totalForce.add(fa);
+      }
+      fr.subVectors(p1, p2).divideScalar(d).multiplyScalar(repulsiveForce(d));
+      fr.multiplyScalar(0.01);
+      v1.userData.totalForce.add(fr);
+    }
+  }
+
+  for (let i = 0; i < graph.order; i++) {
+    const v = graph.vertices[i];
+    v.position.add(v.userData.totalForce);
+  }
+}
+
 function updateEdges() {
 
   const p1 = new THREE.Vector3();
@@ -249,22 +318,8 @@ function updateEdges() {
   for (let i = 0; i < graph.size; i++) {
     const edge = graph.edges[i];
 
-    p1.copy(edge.userData.v1.position);
-    p2.copy(edge.userData.v2.position);
-
-    // コントローラーが触っているときは、その分ずらす
-    if (edge.userData.v1 === controller1.userData.selected) {
-      p1.applyEuler(controller1.rotation).add(controller1.position);
-    }
-    if (edge.userData.v1 === controller2.userData.selected) {
-      p1.applyEuler(controller2.rotation).add(controller2.position);
-    }
-    if (edge.userData.v2 === controller1.userData.selected) {
-      p2.applyEuler(controller1.rotation).add(controller1.position);
-    }
-    if (edge.userData.v2 === controller2.userData.selected) {
-      p2.applyEuler(controller2.rotation).add(controller2.position);
-    }
+    getVertexPosition(p1, edge.userData.v1);
+    getVertexPosition(p2, edge.userData.v2);
 
     edge.scale.z = p1.distanceTo(p2);
 
