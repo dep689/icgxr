@@ -62,8 +62,8 @@ function initGraph() {
   graph.size = graph.edges.length;
 
   // 頂点が均等に広がるための最適な距離
-  const outlineWidth = .3;
-  graph.optimalDistance = (outlineWidth ** 3 / graph.order) ** (1/3);
+  const volume = 0.6 ** 3;
+  graph.optimalDistance = (volume / graph.order) ** (1/3);
 
 }
 
@@ -184,6 +184,7 @@ function onSelectEnd(event) {
 
     controller.userData.selected = undefined;
 
+    object.userData.freeze = false;
   }
 
 }
@@ -249,20 +250,6 @@ function render() {
 
 }
 
-function attractiveForce(distance) {
-  return distance * distance / graph.optimalDistance;
-}
-
-function repulsiveForce(distance) {
-  return graph.optimalDistance * graph.optimalDistance / distance;
-}
-
-function clearForce() {
-  for (let i = 0; i < graph.order; i++) {
-    graph.vertices[i].userData.totalForce.set(0,0,0);
-  }
-}
-
 function getVertexPosition(p, v) {
   p.copy(v.position);
 
@@ -274,6 +261,22 @@ function getVertexPosition(p, v) {
     p.applyEuler(controller2.rotation).add(controller2.position);
   }
 }
+
+function clearForce() {
+  for (let i = 0; i < graph.order; i++) {
+    graph.vertices[i].userData.totalForce.set(0,0,0);
+  }
+}
+
+function attractiveForce(d) {
+  return d ** 2 / graph.optimalDistance;
+}
+
+function repulsiveForce(d) {
+  if (d === 0) return 0;
+  return graph.optimalDistance ** 2 / d;
+}
+
 
 function updateVertices() {
 
@@ -299,18 +302,17 @@ function updateVertices() {
       // v1 に働く力
       const d = p1.distanceTo(p2);
       if (graph.isAdjacent(i, j)) {
-        fa.subVectors(p2, p1).divideScalar(d).multiplyScalar(attractiveForce(d));
-        fa.multiplyScalar(0.01);
+        fa.subVectors(p2, p1).setLength(attractiveForce(d));
         v1.userData.totalForce.add(fa);
       }
-      fr.subVectors(p1, p2).divideScalar(d).multiplyScalar(repulsiveForce(d));
-      fr.multiplyScalar(0.01);
+      fr.subVectors(p1, p2).setLength(repulsiveForce(d));
       v1.userData.totalForce.add(fr);
     }
   }
 
   for (let i = 0; i < graph.order; i++) {
     const v = graph.vertices[i];
+    v.userData.totalForce.multiplyScalar(0.01);
     v.position.add(v.userData.totalForce);
   }
 }
